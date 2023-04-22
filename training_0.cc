@@ -167,9 +167,23 @@ void feat_5() {
 }
 
 /// example of Uniform Initialization
+// std::initializer_list<T>
+class myVec {
+ public:
+  myVec(const std::initializer_list<int>& list) {
+    for (auto& i : list) {
+      std::cout << i << ' ';
+    }
+    std::cout << std::endl;
+  }
+};
+
 void feat_6() {
   std::vector<int> v = {10};
   std::vector<int> vv = {1, 2, 3};
+
+  myVec vec = {1, 2, 3, 4, 5};
+  myVec vec2({1, 2, 3, 4, 5});
 }
 
 /// lambda
@@ -440,22 +454,6 @@ void feat_15() {
   // 结构化绑定
   auto [aa, bb, cc] = get_param();
   std::cout << aa << ' ' << bb << ' ' << cc << std::endl;
-}
-
-// std::initializer_list<T>
-class myVec {
- public:
-  myVec(const std::initializer_list<int>& list) {
-    for (auto& i : list) {
-      std::cout << i << ' ';
-    }
-    std::cout << std::endl;
-  }
-};
-
-void feat_16() {
-  myVec vec = {1, 2, 3, 4, 5};
-  myVec vec2({1, 2, 3, 4, 5});
 }
 
 #include <chrono>
