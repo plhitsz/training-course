@@ -10,12 +10,21 @@
  * @copyright Copyright (c) 2023
  *
  */
+
+#include <algorithm>
+#include <any>
 #include <cassert>
+#include <chrono>
 #include <functional>
 #include <future>
+#include <initializer_list>
 #include <iostream>
 #include <memory>
+#include <optional>
+#include <set>
+#include <string>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 /// @memory order
@@ -25,6 +34,7 @@
 /// them."
 /// reference: https://en.cppreference.com/w/cpp/atomic/memory_order
 #include <atomic>
+
 // relaxed: std::memory_order_relaxed
 void feat_0() {
   std::atomic<int> r1 = {0};
@@ -35,26 +45,25 @@ void feat_0() {
   // guess the order of A, B, C, D
   v.emplace_back([&x, &y, &r1]() {
     // Thread 1:
-    r1 = y.load(std::memory_order_relaxed);  // A(读)
-    x.store(r1, std::memory_order_relaxed);  // B(写)
+    r1 = y.load(std::memory_order_relaxed);  // A(读y)
+    x.store(r1, std::memory_order_relaxed);  // B(写x)
   });
 
   v.emplace_back([&x, &y, &r2]() {
     // Thread 2:
-    r2 = x.load(std::memory_order_relaxed);  // C(读)
-    y.store(42, std::memory_order_relaxed);  // D(写)
+    r2 = x.load(std::memory_order_relaxed);  // C(读x)
+    y.store(42, std::memory_order_relaxed);  // D(写y)
   });
   for (auto& t : v) {
     t.join();
   }
   std::cout << "Final x = " << x << ", y = " << y << ", r1 = " << r1
             << ", r2 = " << r2 << std::endl;
-  // Final x = 42, y = 42, r1 = 42, r2 = 0:    D->C->B->A
-  // Final x = 0, y = 42, r1 = 0, r2 = 0:      C->D->A->B
+  // Final x = 42, y = 42, r1 = 42, r2 = 0:
+  // Final x = 0, y = 42, r1 = 0, r2 = 0:
 }
 // Usage: the count of shared_ptr
 void feat_1() {
-  int cnt0 = 0;
   // relaxed: They only guarantee atomicity and modification order consistency.
   std::atomic<int> cnt = {0};
   std::vector<std::thread> v;
@@ -110,10 +119,13 @@ void f(T& r) {
 auto sum(int a, int b) -> int { return a + b; }
 auto create_vec() -> std::vector<int> { return std::vector<int>(); }
 auto sum2(int a, int b) -> decltype(a + b) { return a + b; }
+// refactoring: change the return type of sum
+void refactoring() { auto res = sum(1, 2); }
 
 /// for ...
 void feat_3() {
   int sum = 0;
+  // initializer_list
   for (auto i : {1, 2, 3, 5, 8}) sum += i;
 
   std::vector<std::string> str_vec = {"hello", "world"};
@@ -140,10 +152,11 @@ class Test {
   }
   int i = 0;
 };
+
 void feat_4() {
   Test t;
   // move construct
-  Test t2 = std::move(t);
+  Test t2 = std::move(t);  //&&
   // move assignment
   Test t3;
   t3 = std::move(t);
@@ -179,6 +192,8 @@ class myVec {
 };
 
 void feat_6() {
+  std::vector<int> vvvv(10);
+  std::vector<int> vvvvv(10, 1);
   std::vector<int> v = {10};
   std::vector<int> vv = {1, 2, 3};
 
@@ -193,7 +208,7 @@ void feat_7() {
 
   // capture
   int a = 10;
-  auto sum_f2 = [a](int b) { return a + b; };
+  auto sum_f2 = [&a](int b) { return a + b; };
   sum_f2(9);
 
   // generic lambda: auto can be deduced.
@@ -206,7 +221,10 @@ void feat_7() {
 
   std::vector<int> v1{1, 2, 3};
   std::vector<std::string> v2{"a", "b", "c"};
-  // std::for_each(v.cbegin(), v.cend(), print2);
+  std::for_each(v1.cbegin(), v1.cend(),
+                [](const auto& n) { std::cout << n << ' '; });
+  std::for_each(v2.cbegin(), v2.cend(),
+                [](const auto& n) { std::cout << n << ' '; });
 
   std::cout << std::endl;
   // function of function
@@ -219,7 +237,7 @@ void feat_7() {
   };
   std::for_each(v.cbegin(), v.cend(), print_less_than(15));
   std::cout << std::endl;
-
+  std::cout << "bind version:" << std::endl;
   // use std::bind to implement print_less_than
   auto less_than = [](int x, auto y) {
     if (y < x) {
@@ -228,7 +246,20 @@ void feat_7() {
   };
   std::for_each(v.cbegin(), v.cend(),
                 std::bind(less_than, 15, std::placeholders::_1));
+  std::cout << std::endl;
 
+  // more bind example
+  int n = 7;
+  auto f = [](int n1, int n2, int n3, const int& n4, int n5) {
+    std::cout << n1 << ' ' << n2 << ' ' << n3 << ' ' << n4 << ' ' << n5 << '\n';
+  };
+  auto f1 = std::bind(f, std::placeholders::_2, 42, std::placeholders::_1,
+                      std::cref(n), n);
+  n = 10;
+  f1(1, 2, 1001);  // 1 is bound by _1, 2 is bound by _2, 1001 is unused
+                   // makes a call to f(2, 42, 1, n, 7)
+
+  std::cout << "move capture:" << std::endl;
   // move capture
   auto res = std::make_unique<Test>();
   auto handle_test = [move_res = std::move(res)]() mutable {
@@ -399,7 +430,6 @@ void feat_12() {
   v.emplace_back("!");
 }
 
-#include <any>
 /// std::any
 void feat_13() {
   std::any a = 1;
@@ -409,13 +439,13 @@ void feat_13() {
   a = std::string("hello");
   std::cout << std::any_cast<std::string>(a) << std::endl;
 }
-#include <optional>
+
 /// std::optional
-/// return a valid name not empty
+/// return a valid name and may be empty
 std::optional<std::string> get_name() {
   std::string name = "halo";
-  if (name.empty()) {
-    return std::nullopt;
+  if (false) {
+    return std::nullopt;  // "failed" or -1
   }
   return name;
 }
@@ -427,6 +457,7 @@ std::tuple<bool, std::string> get_name2() {
   }
   return {true, name};
 }
+
 void feat_14() {
   auto name = get_name();
   if (name.has_value()) {
@@ -456,13 +487,23 @@ void feat_15() {
   std::cout << aa << ' ' << bb << ' ' << cc << std::endl;
 }
 
-#include <chrono>
-#include <future>
-#include <thread>
-#include <utility>
+// NULL 0 nullptr
+/*
+#ifndef __cplusplus
+  #define NULL ((void*)0)
+#else
+  #define NULL 0
+#endif
+*/
+void bar(int a, int* b) {}
+void bar(int a, int i) {}
+void feat_16() {
+  int* p = NULL;
+  std::cout << p << std::endl;
+}
 
 int main() {
-  feat_16();
+  feat_7();
   // mutex
   // condition_variable
   // scoped_lock
@@ -503,9 +544,7 @@ int main() {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         return a + b;
       });
-  // auto task = std::make_shared<std::packaged_task<bool()>>(
-  //    std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-  // action
+  // ()
   (*task)(1, 3);
 
   // get `std::future` object and wait for results here.
@@ -528,9 +567,9 @@ int main() {
 
   // std::async
   std::cout << "async ======= " << std::endl;
-  // std::future<std::string> a3;
+  std::future<std::string> a3;
   {
-    auto a3 = std::async(std::launch::async, []() -> std::string {
+    a3 = std::async(std::launch::async, []() -> std::string {
       std::this_thread::sleep_for(std::chrono::seconds(2));
       std::cout << "work done!" << std::endl;
       return "ok";
